@@ -1,0 +1,21 @@
+---
+description: 批改台 UI 結構、紙感樣式與狀態處理
+globs: src/**/*.tsx,src/**/*.css
+alwaysApply: false
+---
+
+# UI 慣例
+
+`App.tsx` 用 `tab` 切換批改與歷史，不要引入 react-router。批改頁維持左輸入、右結果；歷史頁顯示科目平均、弱點分析、紀錄列表。
+
+必要狀態：`loading` / `statusMessage` / `error`（批改）、`historyLoading` / `historyError`（歷史）。送出條件是科目、題目、擬答皆非空白且未在 loading。批改成功後呼叫 `saveGrading`，失敗只顯示錯誤、不要假裝已存檔。
+
+樣式只寫在 `src/styles.css`，用既有 class（`page`、`sheet`、`field`、`tab`、`dim-row` 等）。顏色用 CSS 變數：`--paper`、`--ink`、`--navy`、`--red`、`--gold`、`--line`。標題用 `--serif`，本文用 `--sans`。不要加 Tailwind 或 CSS-in-JS。
+
+```tsx
+// ❌ 新依賴、新設計系統
+<button className="btn btn-primary">送出</button>
+
+// ✅ 既有 class
+<button className="submit" disabled={!canSubmit}>送出批改</button>
+```

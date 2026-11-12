@@ -1,0 +1,15 @@
+---
+description: essay_gradings 資料表、型別與歷史統計
+globs: src/lib/history.ts,src/lib/supabase.ts,src/types.ts,supabase/**/*.sql
+alwaysApply: false
+---
+
+# 資料層
+
+只使用 `essay_gradings`，不要動同一個 Supabase 專案裡其他表（例如 FDS）。欄位與 `GradingResult` / `GradingRecord` 對齊：`subject`、`question`、`answer`、`reference_material`、`overall_score`、`dimensions`、`paragraph_notes`、`summary`。改 schema 時同步改 `supabase/schema.sql` 與 TypeScript 型別。
+
+`saveGrading` / `fetchHistory` 走 `@supabase/supabase-js`，錯誤轉成繁中 `Error` 再往上丟。列表依 `created_at` 新到舊。
+
+`overall_score` 是文字區間。統計用 `scoreMidpoint`（`"62-68"` → 65），不要 `parseInt` 整段字串。`weakestDimensions` 依維度平均由低到高排。
+
+目前 RLS 對 anon 全開，僅適合本機個人使用。不要在未加身分驗證前收緊到讓本機寫入失敗。

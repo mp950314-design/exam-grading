@@ -1,0 +1,16 @@
+---
+description: 申論題批改台的產品定位、技術棧與改動原則
+alwaysApply: true
+---
+
+# 專案脈絡
+
+這是本機個人用的「三等刑事警察人員特考申論題批改台」。輸入科目、題目、擬答與選填參考資料，用 Gemini 五維給分＋段落評註，結果存進 Supabase。
+
+- 技術：Vite + React 18 + TypeScript（strict）+ 純 CSS。沒有 router、狀態庫、測試框架。
+- 進入點：`src/main.tsx` → `src/App.tsx`（單檔雙分頁：批改 / 歷史紀錄）。
+- 批改：`src/lib/grader.ts`；儲存與趨勢：`src/lib/history.ts`；型別：`src/types.ts`。
+- 科目建議預設為：犯罪偵查學、偵查法學、刑案現場處理與刑事鑑識。
+- 維持小而可讀：不要為了抽象而加新目錄或依賴。新邏輯優先放既有模組。
+- UI 文案與錯誤訊息用繁體中文。不要把 Gemini API key 或 `.env` 寫進程式碼或規則以外的檔案。
+- 這是個人本機工具：前端直接打 Gemini 與 Supabase anon。公開部署前必須先改後端代呼與 RLS，不要在未改之前建議公開上線。

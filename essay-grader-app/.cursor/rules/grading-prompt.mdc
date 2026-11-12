@@ -1,0 +1,21 @@
+---
+description: Gemini 批改流程、五維評分與 JSON 契約
+globs: src/lib/grader.ts
+alwaysApply: false
+---
+
+# 批改契約
+
+`gradeEssay` 在瀏覽器端呼叫 Gemini `generateContent`，模型固定 `gemini-3.6-flash`。改模型或 generationConfig 時，保留 `responseMimeType: application/json`、429/503 重試與 `onStatus` 進度回報。
+
+五個維度名稱不要擅自改名（歷史趨勢依 `name` 聚合）：
+
+1. 破題與爭點掌握
+2. 法條引用正確性（鑑識／實務科可改評作業程序掌握）
+3. 論證結構完整度
+4. 涵蓋考點程度
+5. 結論呼應與用語規範
+
+回傳必須符合 `GradingResult`：`overall_score` 為區間字串（如 `"62-68"`）、每維 `score` 為 0–10、2–4 則段落評註、`summary` 簡短。解析前可去掉 markdown 圍欄。
+
+System prompt 必須繼續要求：有參考資料時，法條／流程只能引用該資料；沒有參考資料時，法條維度評語要附「未提供參考資料」警示。不要讓模型編造法條號碼。
