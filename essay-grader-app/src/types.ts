@@ -23,6 +23,8 @@ export interface GradingRecord {
   subject: string;
   question: string;
   answer: string;
+  reference_material: string | null;
+  model: string | null;
   overall_score: string | null;
   dimensions: Dimension[] | null;
   paragraph_notes: ParagraphNote[] | null;

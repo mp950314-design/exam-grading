@@ -5,6 +5,8 @@ create table if not exists essay_gradings (
   subject text not null,
   question text not null,
   answer text not null,
+  reference_material text,
+  model text,
   overall_score text,
   dimensions jsonb,
   paragraph_notes jsonb,

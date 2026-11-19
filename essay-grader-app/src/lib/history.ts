@@ -6,13 +6,15 @@ export async function saveGrading(
   question: string,
   answer: string,
   result: GradingResult,
-  referenceMaterial?: string
+  referenceMaterial?: string,
+  model?: string
 ) {
   const { error } = await supabase.from("essay_gradings").insert({
     subject,
     question,
     answer,
     reference_material: referenceMaterial?.trim() || null,
+    model: model || null,
     overall_score: result.overall_score,
     dimensions: result.dimensions,
     paragraph_notes: result.paragraph_notes,

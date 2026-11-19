@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
-import { gradeEssay, SUBJECT_SUGGESTIONS } from "./lib/grader";
+import { gradeEssay, SUBJECT_SUGGESTIONS, MODEL_OPTIONS, DEFAULT_MODEL } from "./lib/grader";
 import { saveGrading, fetchHistory, averageBySubject, weakestDimensions } from "./lib/history";
+import { extractPdfText } from "./lib/pdf";
 import type { GradingRecord, GradingResult } from "./types";
 
 type Tab = "grade" | "history";
@@ -11,31 +12,85 @@ export default function App() {
   const [question, setQuestion] = useState("");
   const [answer, setAnswer] = useState("");
   const [referenceMaterial, setReferenceMaterial] = useState("");
+  const [model, setModel] = useState(DEFAULT_MODEL);
   const [loading, setLoading] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [elapsedSec, setElapsedSec] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<GradingResult | null>(null);
+  const abortRef = React.useRef<AbortController | null>(null);
 
   const [history, setHistory] = useState<GradingRecord[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState<string | null>(null);
 
   const canSubmit = subject.trim() && question.trim() && answer.trim() && !loading;
+  // 平常一次批改大概 10-25 秒，超過這個門檻就提醒使用者「比平常久」
+  const STALL_WARNING_SECONDS = 25;
+
+  useEffect(() => {
+    if (!loading) return;
+    const timer = setInterval(() => setElapsedSec((s) => s + 1), 1000);
+    return () => clearInterval(timer);
+  }, [loading]);
 
   async function handleGrade() {
+    const controller = new AbortController();
+    abortRef.current = controller;
     setLoading(true);
     setError(null);
     setResult(null);
     setStatusMessage(null);
+    setElapsedSec(0);
     try {
-      const graded = await gradeEssay(subject, question, answer, referenceMaterial, setStatusMessage);
+      const graded = await gradeEssay(subject, question, answer, referenceMaterial, {
+        model,
+        onStatus: setStatusMessage,
+        signal: controller.signal,
+      });
       setResult(graded);
-      await saveGrading(subject, question, answer, graded, referenceMaterial);
+      await saveGrading(subject, question, answer, graded, referenceMaterial, model);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "批改失敗，請再試一次。");
+      if (e instanceof DOMException && e.name === "AbortError") {
+        setError("已取消這次批改。");
+      } else {
+        setError(e instanceof Error ? e.message : "批改失敗，請再試一次。");
+      }
     } finally {
       setLoading(false);
       setStatusMessage(null);
+        abortRef.current = null;
+    }
+  }
+
+  function handleCancel() {
+    abortRef.current?.abort();
+  }
+
+  const [pdfExtracting, setPdfExtracting] = useState(false);
+  const [pdfError, setPdfError] = useState<string | null>(null);
+
+  async function handlePdfUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // 清空，方便之後重複上傳同一個檔案
+    if (!file) return;
+    setPdfExtracting(true);
+    setPdfError(null);
+    try {
+      const text = await extractPdfText(file);
+      if (!text) {
+        setPdfError(
+          "這份 PDF 抓不到任何文字，可能是掃描圖片（不是真的文字），這個功能沒辦法處理這種 PDF。"
+        );
+        return;
+      }
+      setReferenceMaterial((prev) => (prev.trim() ? `${prev.trim()}\n\n${text}` : text));
+    } catch (err) {
+      setPdfError(
+        `PDF 讀取失敗：${err instanceof Error ? err.message : String(err)}`
+      );
+    } finally {
+      setPdfExtracting(false);
     }
   }
 
@@ -84,6 +139,15 @@ export default function App() {
         <div className="grid">
           <section className="sheet">
             <label className="field">
+              <span className="field-label">使用模型</span>
+              <select className="input" value={model} onChange={(e) => setModel(e.target.value)}>
+                {MODEL_OPTIONS.map((m) => (
+                  <option key={m.id} value={m.id}>{m.label}</option>
+                ))}
+              </select>
+            </label>
+
+            <label className="field">
               <span className="field-label">科目</span>
               <input
                 list="subjects"
@@ -122,14 +186,35 @@ export default function App() {
             </label>
 
             <label className="field">
-              <span className="field-label">參考資料（選填，但強烈建議提供）</span>
+              <div className="field-label-row">
+                <span className="field-label">參考資料（選填，但強烈建議提供）</span>
+                <label className="pdf-upload-btn">
+                  {pdfExtracting ? "讀取中…" : "上傳 PDF 自動擷字"}
+                  <input
+                    type="file"
+                    accept="application/pdf"
+                    onChange={handlePdfUpload}
+                    disabled={pdfExtracting}
+                    style={{ display: "none" }}
+                  />
+                </label>
+              </div>
+              {pdfError && <p className="error" style={{ marginBottom: 8 }}>{pdfError}</p>}
               <textarea
                 value={referenceMaterial}
                 onChange={(e) => setReferenceMaterial(e.target.value)}
-                placeholder="貼上該題相關的法條原文、講義重點或官方參考答案。有提供的話，批改會以這份資料為準，避免亂引用法條號碼。"
+                placeholder="貼上該題相關的法條原文、講義重點或官方參考答案，或用上面的按鈕上傳 PDF 自動擷取文字。"
                 className="textarea"
                 rows={6}
               />
+              {referenceMaterial.length > 0 && (
+                <p className={referenceMaterial.length > 20000 ? "error" : "ref-count"}>
+                  目前約 {referenceMaterial.length.toLocaleString()} 字
+                  {referenceMaterial.length > 20000
+                    ? "，偏長！每次批改都會整份送出（自動重試也會再送一次），容易撞到每分鐘字數上限，建議只留相關章節。"
+                    : "（每次批改都會整份送出）"}
+                </p>
+              )}
             </label>
 
             <button className="submit" disabled={!canSubmit} onClick={handleGrade}>
@@ -149,8 +234,21 @@ export default function App() {
               </div>
             )}
             {loading && (
-              <div className="empty">
-                <p>{statusMessage || "閱卷委員審閱中…"}</p>
+              <div className="loading-block">
+                <div className="loading-bar">
+                  <div className="loading-bar-fill" />
+                </div>
+                <p className="loading-main">
+                  {statusMessage || `閱卷委員審閱中… 已經 ${elapsedSec} 秒`}
+                </p>
+                {elapsedSec >= STALL_WARNING_SECONDS && !statusMessage && (
+                  <p className="loading-warning">
+                    這次比平常久（平常約 10-25 秒），可能卡住了。可以再等等，或取消重新送出。
+                  </p>
+                )}
+                <button className="cancel-btn" onClick={handleCancel}>
+                  取消
+                </button>
               </div>
             )}
             {result && (
@@ -257,6 +355,7 @@ export default function App() {
                 <div className="history-top">
                   <span className="history-subject">{r.subject}</span>
                   {r.reference_material && <span className="history-ref-tag">有參考資料</span>}
+                  {r.model && <span className="history-ref-tag">{r.model}</span>}
                   <span className="history-date">
                     {new Date(r.created_at).toLocaleString("zh-TW")}
                   </span>
