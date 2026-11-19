@@ -46,11 +46,14 @@ function extractRetryDelaySeconds(data: any, fallback: number): number {
   const retryDelayStr = retryInfo?.retryDelay as string | undefined;
   if (retryDelayStr) {
     const match = retryDelayStr.match(/(\d+(\.\d+)?)/);
-    if (match) return Math.ceil(parseFloat(match[1]));
+    if (match) return Math.max(1, Math.ceil(parseFloat(match[1])));
   }
   const message = String(data?.error?.message || "");
-  const msgMatch = message.match(/retry in (\d+(\.\d+)?)s/i);
-  if (msgMatch) return Math.ceil(parseFloat(msgMatch[1]));
+  // 訊息可能用秒（"58.7s"）或毫秒（"643.03106ms"）表示，兩種都要能解析
+  const msMatch = message.match(/retry in (\d+(\.\d+)?)ms/i);
+  if (msMatch) return Math.max(1, Math.ceil(parseFloat(msMatch[1]) / 1000));
+  const secMatch = message.match(/retry in (\d+(\.\d+)?)s/i);
+  if (secMatch) return Math.max(1, Math.ceil(parseFloat(secMatch[1])));
   return fallback;
 }
 
@@ -92,9 +95,9 @@ export async function gradeEssay(
           system_instruction: { parts: [{ text: SYSTEM_PROMPT }] },
           contents: [{ role: "user", parts: [{ text: userPrompt }] }],
           generationConfig: {
-            maxOutputTokens: 8192,
+            maxOutputTokens: 12000,
             responseMimeType: "application/json",
-            thinkingConfig: { thinkingLevel: "low" },
+            thinkingConfig: { thinkingLevel: "high" },
           },
         }),
       }
